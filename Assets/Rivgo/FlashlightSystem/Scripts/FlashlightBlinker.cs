@@ -5,6 +5,7 @@ using Rivgo.Flashlight;
 namespace Rivgo.FlashlightSystem.Scripts
 {
 	[RequireComponent(typeof(IFlashlightCore))]
+	[AddComponentMenu("Rivgo/Flashlight/Flashlight Blinker")]
 	public class FlashlightBlinker : MonoBehaviour
 	{
 		[Header("Blinking Activation")]

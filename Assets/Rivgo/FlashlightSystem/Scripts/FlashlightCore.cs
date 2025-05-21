@@ -4,13 +4,12 @@ using UnityEngine;
 
 namespace Rivgo.FlashlightSystem.Scripts
 {
+	[AddComponentMenu("Rivgo/Flashlight/Flashlight Core")]
 	public class FlashlightCore : MonoBehaviour, IFlashlightCore
 	{
 		public event Action<bool> OnStateChanged;
 		public event Action OnTurnedOn;
 		public event Action OnTurnedOff;
-
-		[field: SerializeField]
 		public bool IsOn { get; private set; }
 		public Light LightSource => _lightSource;
 		public Transform FlashlightTransform => transform;
@@ -98,8 +97,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 					return;
 				}
 			}
-
-			_lightSource.enabled = IsOn;
 		}
 	}
 }
