@@ -1,5 +1,5 @@
 {
-    "name": "InputSystem_Actions",
+    "name": "Rivgo_FPC_InputSystem_Actions",
     "maps": [
         {
             "name": "Player",
@@ -24,7 +24,7 @@
                     "initialStateCheck": true
                 },
                 {
-                    "name": "Flashlight",
+                    "name": "SwitchFlashlight",
                     "type": "Button",
                     "id": "542c2778-18a3-4b67-b70a-e498a9868a2f",
                     "expectedControlType": "",
@@ -215,7 +215,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": ";Keyboard&Mouse",
-                    "action": "Flashlight",
+                    "action": "SwitchFlashlight",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

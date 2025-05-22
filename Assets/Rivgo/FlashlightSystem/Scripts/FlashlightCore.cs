@@ -57,17 +57,15 @@ namespace Rivgo.FlashlightSystem.Scripts
 		{
 			if (_lightSource == null)
 			{
-				_lightSource = GetComponentInChildren<Light>();
-
-				if (_lightSource == null)
+				if (!TryFindLightSource())
 				{
-					Debug.LogError("LightSource not found on FlashlightCore or its children!", this);
+					Debug.LogError("LightSource not found on FlashlightCore or its children! Disabling FlashlightCore component.", this);
 					enabled = false;
-
 					return;
 				}
 			}
 		}
+
 		private void Start()
 		{
 			if (_startsOn) TurnOn();
@@ -87,16 +85,22 @@ namespace Rivgo.FlashlightSystem.Scripts
 		private void OnValidate()
 		{
 			if (_lightSource == null)
-			{
-				_lightSource = GetComponentInChildren<Light>();
+				if (!TryFindLightSource())
+					Debug.LogError("LightSource not found on FlashlightCore or its children! Please assign it manually in the Inspector.", this);
+		}
 
-				if (_lightSource == null)
-				{
-					Debug.LogError("LightSource not found on FlashlightCore or its children!", this);
-					enabled = false;
-					return;
-				}
-			}
+		/// <summary>
+		/// Attempts to find the Light component in children and assigns it to _lightSource.
+		/// </summary>
+		/// <returns>True if the LightSource was found and assigned, false otherwise.</returns>
+		private bool TryFindLightSource()
+		{
+			_lightSource = GetComponentInChildren<Light>();
+
+			if (_lightSource == null)
+				return false;
+
+			return true;
 		}
 	}
 }

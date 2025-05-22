@@ -6,7 +6,7 @@ namespace Rivgo.FlashlightSystem.Scripts
 {
 	[RequireComponent(typeof(IFlashlightCore))]
 	[AddComponentMenu("Rivgo/Flashlight/Flashlight Blinker")]
-	public class FlashlightBlinker : MonoBehaviour
+	public class FlashlightBlinker : MonoBehaviour, IFlashlightBlinker
 	{
 		[Header("Blinking Activation")]
 		[SerializeField]
@@ -72,11 +72,19 @@ namespace Rivgo.FlashlightSystem.Scripts
 		[Tooltip("If true, the light's intensity will be restored to its original value when all blinking effects stop or the component is disabled. Otherwise, it might stay at the last blinked intensity.")]
 		private bool _restoreOriginalIntensityOnStop = true;
 
-		private Light LightSource => _flashlight.LightSource;
+		private Light LightSource => _flashlight?.LightSource;
 		private IFlashlightCore _flashlight;
-		private Coroutine _mainCycleCoroutine;
+		private Coroutine _manageBlinkingLifecycleCoroutine;
 		private float _originalIntensity;
-		private bool _isInBlinkingBurstPhase = false;
+
+		private enum BlinkerState
+		{
+			Idle,
+			WaitingForNextBurst,
+			InBurst
+		}
+
+		private BlinkerState _currentState = BlinkerState.Idle;
 
 		/// <summary>
 		/// Sets the active state of the overall blinking behavior.
@@ -86,37 +94,37 @@ namespace Rivgo.FlashlightSystem.Scripts
 		/// <param name="active">True to activate blinking behavior, false to deactivate.</param>
 		public void SetBlinkingBehavior(bool active)
 		{
-			_isBlinkingActive = active;
+			if (_flashlight == null || LightSource == null)
+			{
+				Debug.LogWarning("FlashlightCore or LightSource not available. Cannot set blinking behavior.", this);
+				_isBlinkingActive = false;
+				return;
+			}
 
-			if (_flashlight == null || LightSource == null) return;
+			_isBlinkingActive = active;
 
 			if (_isBlinkingActive)
 			{
-				if (_flashlight.IsOn)
-				{
-					_isInBlinkingBurstPhase = true;
-					StartMainCycle();
-				}
+				if (_flashlight.IsOn && _currentState == BlinkerState.Idle)
+					_currentState = BlinkerState.WaitingForNextBurst;
 			}
 			else
-			{
-				StopAllBlinkingEffects();
-			}
+				_currentState = BlinkerState.Idle;
 		}
 
 		/// <summary>
-		/// Call this to manually trigger a blinking burst, regardless of the current interval.
-		/// The overall _isBlinkingActive must be true for this to have an effect.
+		/// Call this to manually trigger a blinking burst if _isBlinkingActive is true.
 		/// </summary>
 		public void TriggerBlinkingBurst()
 		{
-			if (!_isBlinkingActive || _flashlight == null || LightSource == null || !_flashlight.IsOn) return;
+			if (!_isBlinkingActive || _flashlight == null || LightSource == null || !_flashlight.IsOn)
+			{
+				Debug.LogWarning("Cannot trigger burst: Blinking is inactive, flashlight is off, or core components missing.", this);
+				return;
+			}
 
-			_isInBlinkingBurstPhase = true;
-			if (_mainCycleCoroutine != null)
-				StopCoroutine(_mainCycleCoroutine);
-
-			_mainCycleCoroutine = StartCoroutine(MainBlinkCycleRoutine());
+			if (_currentState == BlinkerState.WaitingForNextBurst || _currentState == BlinkerState.Idle)
+				_currentState = BlinkerState.InBurst;
 		}
 
 		private void Awake()
@@ -139,169 +147,209 @@ namespace Rivgo.FlashlightSystem.Scripts
 				return;
 			}
 
-			_originalIntensity = LightSource.intensity;
-
 			_flashlight.OnTurnedOn += HandleFlashlightTurnedOn;
 			_flashlight.OnTurnedOff += HandleFlashlightTurnedOff;
 		}
 
 		private void OnDestroy()
 		{
-			if (_flashlight != null)
-			{
-				_flashlight.OnTurnedOn -= HandleFlashlightTurnedOn;
-				_flashlight.OnTurnedOff -= HandleFlashlightTurnedOff;
-			}
+			if (_flashlight == null)
+				return;
 
-			StopAllBlinkingEffects();
+			_flashlight.OnTurnedOn -= HandleFlashlightTurnedOn;
+			_flashlight.OnTurnedOff -= HandleFlashlightTurnedOff;
 		}
 
 		private void OnEnable()
 		{
-			if (_flashlight == null || LightSource == null) return;
+			if (_flashlight == null || LightSource == null)
+			{
+				Debug.LogError("FlashlightCore or LightSource not available. FlashlightBlinker cannot operate.", this);
+				enabled = false;
+				return;
+			}
 
 			if (_flashlight.IsOn)
 			{
 				_originalIntensity = LightSource.intensity;
-
 				if (_isBlinkingActive)
-					StartMainCycle();
+				{
+					_currentState = BlinkerState.WaitingForNextBurst;
+				}
 				else
 				{
-					LightSource.intensity = _originalIntensity;
-					LightSource.enabled = true;
+					_currentState = BlinkerState.Idle;
+					RestoreIntensityAndEnsureOn();
 				}
 			}
+			else
+				_currentState = BlinkerState.Idle;
+
+			if (_manageBlinkingLifecycleCoroutine != null)
+				StopCoroutine(_manageBlinkingLifecycleCoroutine);
+
+			_manageBlinkingLifecycleCoroutine = StartCoroutine(ManageBlinkingLifecycleRoutine());
 		}
 
 		private void OnDisable()
 		{
-			if (_flashlight == null || LightSource == null) return;
-			StopAllBlinkingEffects();
-
-			if (_restoreOriginalIntensityOnStop && _flashlight.IsOn)
+			if (_manageBlinkingLifecycleCoroutine != null)
 			{
-				LightSource.intensity = _originalIntensity;
-				LightSource.enabled = true;
+				StopCoroutine(_manageBlinkingLifecycleCoroutine);
+				_manageBlinkingLifecycleCoroutine = null;
 			}
+
+			_currentState = BlinkerState.Idle;
+
+			if (_flashlight != null && LightSource != null && _flashlight.IsOn && _restoreOriginalIntensityOnStop)
+				RestoreIntensityAndEnsureOn();
+		}
+
+		private void RestoreIntensityAndEnsureOn()
+		{
+			if (LightSource == null)
+				return;
+
+			LightSource.intensity = _originalIntensity;
+			LightSource.enabled = true;
 		}
 
 		private void HandleFlashlightTurnedOn()
 		{
-			if (LightSource == null) return;
+			if (LightSource == null)
+			{
+				Debug.LogError("LightSource is null in HandleFlashlightTurnedOn. Disabling Blinker.", this);
+				enabled = false;
+				return;
+			}
+
 			_originalIntensity = LightSource.intensity;
 
 			if (_isBlinkingActive)
 			{
-				StartMainCycle();
+				_currentState = BlinkerState.WaitingForNextBurst;
 			}
 			else
 			{
-				LightSource.intensity = _originalIntensity;
-				LightSource.enabled = true;
+				_currentState = BlinkerState.Idle;
+				RestoreIntensityAndEnsureOn();
 			}
 		}
 
 		private void HandleFlashlightTurnedOff()
 		{
-			StopAllBlinkingEffects();
+			_currentState = BlinkerState.Idle;
 		}
 
-		private void StartMainCycle()
+		/// <summary>
+		/// Main coroutine to manage the blinking lifecycle based on the current state.
+		/// </summary>
+		private IEnumerator ManageBlinkingLifecycleRoutine()
 		{
-			if (!enabled || LightSource == null || !_flashlight.IsOn || !_isBlinkingActive)
-				return;
-
-			if (_mainCycleCoroutine != null)
-				StopCoroutine(_mainCycleCoroutine);
-
-			_mainCycleCoroutine = StartCoroutine(MainBlinkCycleRoutine());
-		}
-
-		private void StopAllBlinkingEffects()
-		{
-			if (_mainCycleCoroutine != null)
+			if (_flashlight == null || LightSource == null)
 			{
-				StopCoroutine(_mainCycleCoroutine);
-				_mainCycleCoroutine = null;
+				Debug.LogError("FlashlightCore or LightSource is missing. Stopping blinking lifecycle.", this);
+				enabled = false;
+				yield break;
 			}
-
-			_isInBlinkingBurstPhase = false;
-
-			if (LightSource != null && _flashlight != null && _flashlight.IsOn && _restoreOriginalIntensityOnStop)
-			{
-				LightSource.intensity = _originalIntensity;
-				LightSource.enabled = true;
-			}
-		}
-
-		private IEnumerator MainBlinkCycleRoutine()
-		{
-			if (LightSource == null) yield break;
 
 			if (_flashlight.IsOn)
-			{
-				LightSource.enabled = true;
-				LightSource.intensity = _originalIntensity;
-			}
+				_originalIntensity = LightSource.intensity;
 
-
-			while (_flashlight.IsOn && _isBlinkingActive && enabled)
+			while (enabled)
 			{
-				if (_isInBlinkingBurstPhase)
+				if (!_flashlight.IsOn || !_isBlinkingActive)
 				{
-					float burstDuration = Random.Range(_minBlinkingBurstDuration, _maxBlinkingBurstDuration);
-					float burstEndTime = Time.time + burstDuration;
+					_currentState = BlinkerState.Idle;
+					if (_flashlight.IsOn && _restoreOriginalIntensityOnStop)
+						RestoreIntensityAndEnsureOn();
 
-					while (Time.time < burstEndTime && _flashlight.IsOn && _isBlinkingActive && enabled && _isInBlinkingBurstPhase)
-					{
-						LightSource.intensity = _originalIntensity;
-						LightSource.enabled = true;
-						float onDuration = Random.Range(_minIndividualBlinkOnDuration, _maxIndividualBlinkOnDuration);
-						yield return new WaitForSeconds(onDuration);
+					yield return new WaitUntil(() => _flashlight.IsOn && _isBlinkingActive && enabled);
 
-						if (!(Time.time < burstEndTime && _flashlight.IsOn && _isBlinkingActive && enabled && _isInBlinkingBurstPhase)) break;
-
-						float targetIntensityFactor = Random.Range(_minIntensityFactorDuringBlink, _maxIntensityFactorDuringBlink);
-						LightSource.intensity = _originalIntensity * targetIntensityFactor;
-						LightSource.enabled = (LightSource.intensity > 0.001f);
-
-						float offDuration = Random.Range(_minIndividualBlinkOffDuration, _maxIndividualBlinkOffDuration);
-						yield return new WaitForSeconds(offDuration);
-					}
-					_isInBlinkingBurstPhase = false;
-					if (_flashlight.IsOn && _isBlinkingActive && enabled)
-					{
-						LightSource.intensity = _originalIntensity;
-						LightSource.enabled = true;
-					}
+					if (_flashlight.IsOn) _originalIntensity = LightSource.intensity;
+					_currentState = BlinkerState.WaitingForNextBurst;
 				}
-				else
+
+				switch (_currentState)
 				{
-					if (_flashlight.IsOn)
-					{
-						LightSource.intensity = _originalIntensity;
-						LightSource.enabled = true;
-					}
+					case BlinkerState.Idle:
+						if (_flashlight.IsOn && _isBlinkingActive)
+							_currentState = BlinkerState.WaitingForNextBurst;
+						else
+							yield return null;
 
-					float interval = Random.Range(_minIntervalBetweenBlinkBursts, _maxIntervalBetweenBlinkBursts);
-					yield return new WaitForSeconds(interval);
+						break;
 
-					if (_flashlight.IsOn && _isBlinkingActive && enabled)
-						_isInBlinkingBurstPhase = true;
+					case BlinkerState.WaitingForNextBurst:
+						if (_flashlight.IsOn) RestoreIntensityAndEnsureOn();
+
+						float waitDuration = Random.Range(_minIntervalBetweenBlinkBursts, _maxIntervalBetweenBlinkBursts);
+						yield return StartCoroutine(WaitPhaseRoutine(waitDuration));
+
+						if (_currentState == BlinkerState.WaitingForNextBurst && _flashlight.IsOn && _isBlinkingActive)
+							_currentState = BlinkerState.InBurst;
+
+						break;
+
+					case BlinkerState.InBurst:
+						yield return StartCoroutine(BlinkingBurstPhaseRoutine());
+
+						if (_flashlight.IsOn && _isBlinkingActive)
+							_currentState = BlinkerState.WaitingForNextBurst;
+						else
+							_currentState = BlinkerState.Idle;
+
+						break;
 				}
 			}
+		}
 
-			if (LightSource != null && _flashlight != null)
+		private IEnumerator WaitPhaseRoutine(float duration)
+		{
+			float startTime = Time.time;
+
+			while (Time.time < startTime + duration)
 			{
-				if (_restoreOriginalIntensityOnStop && _flashlight.IsOn)
+				if (_currentState != BlinkerState.WaitingForNextBurst || !_flashlight.IsOn || !_isBlinkingActive)
+					yield break;
+
+				yield return null;
+			}
+		}
+		private IEnumerator BlinkingBurstPhaseRoutine()
+		{
+			if (LightSource == null || _flashlight == null || !_flashlight.IsOn || !_isBlinkingActive)
+				yield break;
+
+			float burstDuration = Random.Range(_minBlinkingBurstDuration, _maxBlinkingBurstDuration);
+			float burstEndTime = Time.time + burstDuration;
+
+			while (Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && _isBlinkingActive)
+			{
+				if (LightSource != null)
 				{
 					LightSource.intensity = _originalIntensity;
 					LightSource.enabled = true;
 				}
-			}
-		}
+				float onDuration = Random.Range(_minIndividualBlinkOnDuration, _maxIndividualBlinkOnDuration);
+				yield return new WaitForSeconds(onDuration);
 
+				if (!(Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && _isBlinkingActive)) break;
+
+				if (LightSource != null)
+				{
+					float targetIntensityFactor = Random.Range(_minIntensityFactorDuringBlink, _maxIntensityFactorDuringBlink);
+					LightSource.intensity = _originalIntensity * targetIntensityFactor;
+					LightSource.enabled = (LightSource.intensity > 0.001f);
+				}
+
+				float offDuration = Random.Range(_minIndividualBlinkOffDuration, _maxIndividualBlinkOffDuration);
+				yield return new WaitForSeconds(offDuration);
+			}
+
+			if (_flashlight.IsOn && _isBlinkingActive && LightSource != null)
+				RestoreIntensityAndEnsureOn();
+		}
 
 		private void OnValidate()
 		{
