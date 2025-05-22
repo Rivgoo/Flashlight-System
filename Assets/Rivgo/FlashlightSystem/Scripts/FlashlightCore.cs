@@ -1,4 +1,4 @@
-﻿using Rivgo.Flashlight;
+﻿using Rivgo.FlashlightSystem.Scripts.Abstractions;
 using System;
 using UnityEngine;
 
@@ -87,11 +87,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 
 			_lightSource.enabled = IsOn;
 		}
-
-		/// <summary>
-		/// Attempts to find the Light component in children and assigns it to _lightSource.
-		/// </summary>
-		/// <returns>True if the LightSource was found and assigned, false otherwise.</returns>
 		private bool TryFindLightSource()
 		{
 			_lightSource = GetComponentInChildren<Light>();

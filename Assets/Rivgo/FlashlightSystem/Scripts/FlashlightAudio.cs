@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
-using Rivgo.Flashlight;
 using System.Collections.Generic;
+using Rivgo.FlashlightSystem.Scripts.Abstractions;
+
 using Random = UnityEngine.Random;
 
 namespace Rivgo.FlashlightSystem.Scripts
