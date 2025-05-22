@@ -65,12 +65,18 @@ namespace Rivgo.FlashlightSystem.Scripts
 				}
 			}
 		}
-
 		private void Start()
 		{
 			if (_startsOn) TurnOn();
 			else TurnOff();
 		}
+		private void OnValidate()
+		{
+			if (_lightSource == null)
+				if (!TryFindLightSource())
+					Debug.LogError("LightSource not found on FlashlightCore or its children! Please assign it manually in the Inspector.", this);
+		}
+
 		private void UpdateLight()
 		{
 			if (_lightSource == null)
@@ -80,13 +86,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 			}
 
 			_lightSource.enabled = IsOn;
-		}
-
-		private void OnValidate()
-		{
-			if (_lightSource == null)
-				if (!TryFindLightSource())
-					Debug.LogError("LightSource not found on FlashlightCore or its children! Please assign it manually in the Inspector.", this);
 		}
 
 		/// <summary>
