@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 using System.Collections;
 using Rivgo.Flashlight;
+using System;
+
+using Random = UnityEngine.Random;
 
 namespace Rivgo.FlashlightSystem.Scripts
 {
@@ -8,10 +11,14 @@ namespace Rivgo.FlashlightSystem.Scripts
 	[AddComponentMenu("Rivgo/Flashlight/Flashlight Blinker")]
 	public class FlashlightBlinker : MonoBehaviour, IFlashlightBlinker
 	{
+		public event Action OnBlinkBurstStarted;
+		public event Action OnBlinkBurstEnded;
+		public event Action OnBlinkingBehaviorChanged;
+
 		[Header("Blinking Activation")]
-		[SerializeField]
-		[Tooltip("If true, the blinking effect (alternating steady light and blinking bursts) will be active when the flashlight is on.")]
-		private bool _isBlinkingActive = false;
+		[field: SerializeField]
+		[field: Tooltip("True if the blinking effect is active when the flashlight is on.")]
+		public bool IsBlinkingActive { get; private set; } = true;
 
 		[Header("Overall Cycle Timing")]
 		[SerializeField]
@@ -85,6 +92,7 @@ namespace Rivgo.FlashlightSystem.Scripts
 		}
 
 		private BlinkerState _currentState = BlinkerState.Idle;
+		private bool _wasInBurstInvoked = false;
 
 		/// <summary>
 		/// Sets the active state of the overall blinking behavior.
@@ -97,34 +105,62 @@ namespace Rivgo.FlashlightSystem.Scripts
 			if (_flashlight == null || LightSource == null)
 			{
 				Debug.LogWarning("FlashlightCore or LightSource not available. Cannot set blinking behavior.", this);
-				_isBlinkingActive = false;
+
+				if (IsBlinkingActive != false)
+				{
+					IsBlinkingActive = false;
+					OnBlinkingBehaviorChanged?.Invoke();
+				}
+
 				return;
 			}
 
-			_isBlinkingActive = active;
+			if (IsBlinkingActive == active)
+				return;
 
-			if (_isBlinkingActive)
+			IsBlinkingActive = active;
+
+			if (IsBlinkingActive)
 			{
 				if (_flashlight.IsOn && _currentState == BlinkerState.Idle)
 					_currentState = BlinkerState.WaitingForNextBurst;
 			}
 			else
+			{
+				if (_currentState == BlinkerState.InBurst && _wasInBurstInvoked)
+				{
+					OnBlinkBurstEnded?.Invoke();
+					_wasInBurstInvoked = false;
+				}
+
 				_currentState = BlinkerState.Idle;
+
+				if (_flashlight.IsOn && _restoreOriginalIntensityOnStop)
+					RestoreIntensityAndEnsureOn();
+			}
+
+			OnBlinkingBehaviorChanged?.Invoke();
 		}
 
 		/// <summary>
-		/// Call this to manually trigger a blinking burst if _isBlinkingActive is true.
+		/// Call this to manually trigger a blinking burst if IsBlinkingActive is true.
 		/// </summary>
 		public void TriggerBlinkingBurst()
 		{
-			if (!_isBlinkingActive || _flashlight == null || LightSource == null || !_flashlight.IsOn)
+			if (!IsBlinkingActive || _flashlight == null || LightSource == null || !_flashlight.IsOn)
 			{
 				Debug.LogWarning("Cannot trigger burst: Blinking is inactive, flashlight is off, or core components missing.", this);
 				return;
 			}
 
 			if (_currentState == BlinkerState.WaitingForNextBurst || _currentState == BlinkerState.Idle)
+			{
+				if (_currentState == BlinkerState.InBurst && _wasInBurstInvoked)
+					OnBlinkBurstEnded?.Invoke();
+
 				_currentState = BlinkerState.InBurst;
+				_wasInBurstInvoked = false;
+			}
 		}
 
 		private void Awake()
@@ -135,7 +171,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 			{
 				Debug.LogError("FlashlightBlinker requires an IFlashlightCore component to work.", this);
 				enabled = false;
-
 				return;
 			}
 
@@ -143,14 +178,12 @@ namespace Rivgo.FlashlightSystem.Scripts
 			{
 				Debug.LogError("IFlashlightCore does not provide a valid LightSource.", this);
 				enabled = false;
-
 				return;
 			}
 
 			_flashlight.OnTurnedOn += HandleFlashlightTurnedOn;
 			_flashlight.OnTurnedOff += HandleFlashlightTurnedOff;
 		}
-
 		private void OnDestroy()
 		{
 			if (_flashlight == null)
@@ -159,7 +192,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 			_flashlight.OnTurnedOn -= HandleFlashlightTurnedOn;
 			_flashlight.OnTurnedOff -= HandleFlashlightTurnedOff;
 		}
-
 		private void OnEnable()
 		{
 			if (_flashlight == null || LightSource == null)
@@ -172,10 +204,9 @@ namespace Rivgo.FlashlightSystem.Scripts
 			if (_flashlight.IsOn)
 			{
 				_originalIntensity = LightSource.intensity;
-				if (_isBlinkingActive)
-				{
+
+				if (IsBlinkingActive)
 					_currentState = BlinkerState.WaitingForNextBurst;
-				}
 				else
 				{
 					_currentState = BlinkerState.Idle;
@@ -185,12 +216,13 @@ namespace Rivgo.FlashlightSystem.Scripts
 			else
 				_currentState = BlinkerState.Idle;
 
+			_wasInBurstInvoked = false;
+
 			if (_manageBlinkingLifecycleCoroutine != null)
 				StopCoroutine(_manageBlinkingLifecycleCoroutine);
 
 			_manageBlinkingLifecycleCoroutine = StartCoroutine(ManageBlinkingLifecycleRoutine());
 		}
-
 		private void OnDisable()
 		{
 			if (_manageBlinkingLifecycleCoroutine != null)
@@ -199,10 +231,36 @@ namespace Rivgo.FlashlightSystem.Scripts
 				_manageBlinkingLifecycleCoroutine = null;
 			}
 
+			if (_currentState == BlinkerState.InBurst && _wasInBurstInvoked)
+			{
+				OnBlinkBurstEnded?.Invoke();
+				_wasInBurstInvoked = false;
+			}
+
 			_currentState = BlinkerState.Idle;
 
 			if (_flashlight != null && LightSource != null && _flashlight.IsOn && _restoreOriginalIntensityOnStop)
 				RestoreIntensityAndEnsureOn();
+		}
+		private void OnValidate()
+		{
+			if (_minIntervalBetweenBlinkBursts > _maxIntervalBetweenBlinkBursts)
+				_maxIntervalBetweenBlinkBursts = _minIntervalBetweenBlinkBursts;
+
+			if (_minBlinkingBurstDuration > _maxBlinkingBurstDuration)
+				_maxBlinkingBurstDuration = _minBlinkingBurstDuration;
+
+			if (_minIndividualBlinkOffDuration > _maxIndividualBlinkOffDuration)
+				_maxIndividualBlinkOffDuration = _minIndividualBlinkOffDuration;
+
+			if (_minIndividualBlinkOnDuration > _maxIndividualBlinkOnDuration)
+				_maxIndividualBlinkOnDuration = _minIndividualBlinkOnDuration;
+
+			if (_minIntensityFactorDuringBlink > _maxIntensityFactorDuringBlink)
+				_maxIntensityFactorDuringBlink = _minIntensityFactorDuringBlink;
+
+			_minIntensityFactorDuringBlink = Mathf.Clamp01(_minIntensityFactorDuringBlink);
+			_maxIntensityFactorDuringBlink = Mathf.Clamp01(_maxIntensityFactorDuringBlink);
 		}
 
 		private void RestoreIntensityAndEnsureOn()
@@ -213,7 +271,6 @@ namespace Rivgo.FlashlightSystem.Scripts
 			LightSource.intensity = _originalIntensity;
 			LightSource.enabled = true;
 		}
-
 		private void HandleFlashlightTurnedOn()
 		{
 			if (LightSource == null)
@@ -225,19 +282,22 @@ namespace Rivgo.FlashlightSystem.Scripts
 
 			_originalIntensity = LightSource.intensity;
 
-			if (_isBlinkingActive)
-			{
+			if (IsBlinkingActive)
 				_currentState = BlinkerState.WaitingForNextBurst;
-			}
 			else
 			{
 				_currentState = BlinkerState.Idle;
 				RestoreIntensityAndEnsureOn();
 			}
 		}
-
 		private void HandleFlashlightTurnedOff()
 		{
+			if (_currentState == BlinkerState.InBurst && _wasInBurstInvoked)
+			{
+				OnBlinkBurstEnded?.Invoke();
+				_wasInBurstInvoked = false;
+			}
+
 			_currentState = BlinkerState.Idle;
 		}
 
@@ -258,13 +318,20 @@ namespace Rivgo.FlashlightSystem.Scripts
 
 			while (enabled)
 			{
-				if (!_flashlight.IsOn || !_isBlinkingActive)
+				if (!_flashlight.IsOn || !IsBlinkingActive)
 				{
+					if (_currentState == BlinkerState.InBurst && _wasInBurstInvoked)
+					{
+						OnBlinkBurstEnded?.Invoke();
+						_wasInBurstInvoked = false;
+					}
+
 					_currentState = BlinkerState.Idle;
+
 					if (_flashlight.IsOn && _restoreOriginalIntensityOnStop)
 						RestoreIntensityAndEnsureOn();
 
-					yield return new WaitUntil(() => _flashlight.IsOn && _isBlinkingActive && enabled);
+					yield return new WaitUntil(() => _flashlight.IsOn && IsBlinkingActive && enabled);
 
 					if (_flashlight.IsOn) _originalIntensity = LightSource.intensity;
 					_currentState = BlinkerState.WaitingForNextBurst;
@@ -273,44 +340,55 @@ namespace Rivgo.FlashlightSystem.Scripts
 				switch (_currentState)
 				{
 					case BlinkerState.Idle:
-						if (_flashlight.IsOn && _isBlinkingActive)
+						if (_flashlight.IsOn && IsBlinkingActive)
 							_currentState = BlinkerState.WaitingForNextBurst;
 						else
 							yield return null;
-
 						break;
 
 					case BlinkerState.WaitingForNextBurst:
+						if (_wasInBurstInvoked)
+						{
+							OnBlinkBurstEnded?.Invoke();
+							_wasInBurstInvoked = false;
+						}
+
 						if (_flashlight.IsOn) RestoreIntensityAndEnsureOn();
 
 						float waitDuration = Random.Range(_minIntervalBetweenBlinkBursts, _maxIntervalBetweenBlinkBursts);
 						yield return StartCoroutine(WaitPhaseRoutine(waitDuration));
 
-						if (_currentState == BlinkerState.WaitingForNextBurst && _flashlight.IsOn && _isBlinkingActive)
+						if (_currentState == BlinkerState.WaitingForNextBurst && _flashlight.IsOn && IsBlinkingActive)
 							_currentState = BlinkerState.InBurst;
 
 						break;
 
 					case BlinkerState.InBurst:
 						yield return StartCoroutine(BlinkingBurstPhaseRoutine());
-
-						if (_flashlight.IsOn && _isBlinkingActive)
+						
+						if (_flashlight.IsOn && IsBlinkingActive)
 							_currentState = BlinkerState.WaitingForNextBurst;
 						else
-							_currentState = BlinkerState.Idle;
+						{
+							if (_wasInBurstInvoked)
+							{
+								OnBlinkBurstEnded?.Invoke();
+								_wasInBurstInvoked = false;
+							}
 
+							_currentState = BlinkerState.Idle;
+						}
 						break;
 				}
 			}
 		}
-
 		private IEnumerator WaitPhaseRoutine(float duration)
 		{
 			float startTime = Time.time;
 
 			while (Time.time < startTime + duration)
 			{
-				if (_currentState != BlinkerState.WaitingForNextBurst || !_flashlight.IsOn || !_isBlinkingActive)
+				if (_currentState != BlinkerState.WaitingForNextBurst || !_flashlight.IsOn || !IsBlinkingActive)
 					yield break;
 
 				yield return null;
@@ -318,23 +396,30 @@ namespace Rivgo.FlashlightSystem.Scripts
 		}
 		private IEnumerator BlinkingBurstPhaseRoutine()
 		{
-			if (LightSource == null || _flashlight == null || !_flashlight.IsOn || !_isBlinkingActive)
+			if (LightSource == null || _flashlight == null || !_flashlight.IsOn || !IsBlinkingActive)
 				yield break;
+
+			if (!_wasInBurstInvoked)
+			{
+				OnBlinkBurstStarted?.Invoke();
+				_wasInBurstInvoked = true;
+			}
 
 			float burstDuration = Random.Range(_minBlinkingBurstDuration, _maxBlinkingBurstDuration);
 			float burstEndTime = Time.time + burstDuration;
 
-			while (Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && _isBlinkingActive)
+			while (Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && IsBlinkingActive)
 			{
 				if (LightSource != null)
 				{
 					LightSource.intensity = _originalIntensity;
 					LightSource.enabled = true;
 				}
+
 				float onDuration = Random.Range(_minIndividualBlinkOnDuration, _maxIndividualBlinkOnDuration);
 				yield return new WaitForSeconds(onDuration);
 
-				if (!(Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && _isBlinkingActive)) break;
+				if (!(Time.time < burstEndTime && _currentState == BlinkerState.InBurst && _flashlight.IsOn && IsBlinkingActive)) break;
 
 				if (LightSource != null)
 				{
@@ -347,29 +432,14 @@ namespace Rivgo.FlashlightSystem.Scripts
 				yield return new WaitForSeconds(offDuration);
 			}
 
-			if (_flashlight.IsOn && _isBlinkingActive && LightSource != null)
+			if (_wasInBurstInvoked)
+			{
+				OnBlinkBurstEnded?.Invoke();
+				_wasInBurstInvoked = false;
+			}
+
+			if (_flashlight.IsOn && IsBlinkingActive && LightSource != null && _restoreOriginalIntensityOnStop)
 				RestoreIntensityAndEnsureOn();
-		}
-
-		private void OnValidate()
-		{
-			if (_minIntervalBetweenBlinkBursts > _maxIntervalBetweenBlinkBursts)
-				_maxIntervalBetweenBlinkBursts = _minIntervalBetweenBlinkBursts;
-
-			if (_minBlinkingBurstDuration > _maxBlinkingBurstDuration)
-				_maxBlinkingBurstDuration = _minBlinkingBurstDuration;
-
-			if (_minIndividualBlinkOffDuration > _maxIndividualBlinkOffDuration)
-				_maxIndividualBlinkOffDuration = _minIndividualBlinkOffDuration;
-
-			if (_minIndividualBlinkOnDuration > _maxIndividualBlinkOnDuration)
-				_maxIndividualBlinkOnDuration = _minIndividualBlinkOnDuration;
-
-			if (_minIntensityFactorDuringBlink > _maxIntensityFactorDuringBlink)
-				_maxIntensityFactorDuringBlink = _minIntensityFactorDuringBlink;
-
-			_minIntensityFactorDuringBlink = Mathf.Clamp01(_minIntensityFactorDuringBlink);
-			_maxIntensityFactorDuringBlink = Mathf.Clamp01(_maxIntensityFactorDuringBlink);
 		}
 	}
 }
