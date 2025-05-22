@@ -22,12 +22,6 @@ jobs:
           UNITY_VERSION_LINE=$(grep "m_EditorVersion:" ProjectSettings/ProjectVersion.txt)
           UNITY_VERSION=$(echo "$UNITY_VERSION_LINE" | awk '{print $2}')
           echo "UNITY_EDITOR_VERSION=$UNITY_VERSION" >> $GITHUB_ENV
-          
-      - name: Set up Unity
-        uses: game-ci/unity-builder@v4
-        with:
-          unityVersion: ${{ env.UNITY_EDITOR_VERSION }}
-          targetPlatform: StandaloneLinux64
 
       - name: Determine Package Version
         id: package_version
