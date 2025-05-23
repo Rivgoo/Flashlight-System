@@ -7,8 +7,8 @@ namespace Editor
 {
 	public class PackageExporter
 	{
-		private const string _packageRootPath = "Assets/Rivgo";
-		private const string _exportPackagePath = "ExportPackage";
+		private const string _packageRootPath = "Assets";
+		private const string _exportPackagePath = "Rivgo/ExportPackage";
 		private const string _packageName = "FlashlightSystem.unitypackage";
 
 		public static void ExportPackage()
