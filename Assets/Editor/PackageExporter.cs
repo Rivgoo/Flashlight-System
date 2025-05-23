@@ -1,4 +1,3 @@
-// File: Assets/Rivgo/Editor/PackageExporter.cs
 using UnityEditor;
 using UnityEngine;
 using System.IO;
