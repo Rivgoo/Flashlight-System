@@ -60,7 +60,7 @@ jobs:
           fi
           
           UNITY_EXPORTED_BASE_NAME="FlashlightSystem"
-          UNITY_EXPORT_DIR="ExportPackage"
+          UNITY_EXPORT_DIR="Assets/Rivgo/ExportPackage"
           UNITY_EXPORTED_FILE_PATH="${UNITY_EXPORT_DIR}/${UNITY_EXPORTED_BASE_NAME}.unitypackage"
 
           FINAL_PACKAGE_NAME_PREFIX="${{ github.event.inputs.package_prefix || 'FlashlightSystem' }}"
@@ -82,14 +82,14 @@ jobs:
           echo "Unity export directory: $UNITY_EXPORT_DIR"
           echo "Path to package after Unity export: $UNITY_EXPORTED_FILE_PATH"
           echo "Path to package for release (after rename): $FINAL_RELEASE_ASSET_PATH"
-
+      
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-${{ runner.os }}-
+            Library-
 
       - name: Get Unity Version
         id: unity_version
@@ -108,7 +108,6 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: ${{ env.UNITY_VERSION_FULL }}
-          targetPlatform: StandaloneLinux64 
           buildMethod: Editor.PackageExporter.ExportPackage
 
       - name: Verify and Rename Exported Package
