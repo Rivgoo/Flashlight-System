@@ -113,23 +113,32 @@ jobs:
 
       - name: Verify and Rename Exported Package
         run: |
-          echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
-          
-          if [ ! -f "${{ env.UNITY_EXPORTED_FILE_PATH }}" ]; then
-            echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."
-            echo "Unity export might have failed. Check Unity logs from the previous step."
-            exit 1
-          fi
-          echo "Package found at ${{ env.UNITY_EXPORTED_FILE_PATH }}."
-          
-          echo "Renaming ${{ env.UNITY_EXPORTED_FILE_PATH }} to ${{ env.FINAL_RELEASE_ASSET_PATH }}"
-          mv "${{ env.UNITY_EXPORTED_FILE_PATH }}" "${{ env.FINAL_RELEASE_ASSET_PATH }}"
-          
-          if [ ! -f "${{ env.FINAL_RELEASE_ASSET_PATH }}" ]; then
-            echo "Error: Failed to rename package to ${{ env.FINAL_RELEASE_ASSET_PATH }}."
-            exit 1
-          fi
-          echo "Package successfully renamed to ${{ env.FINAL_PACKAGE_NAME }} in ${{ env.UNITY_EXPORT_DIR }}."
+            echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            
+            if [ ! -f "${{ env.UNITY_EXPORTED_FILE_PATH }}" ]; then
+              echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."
+              echo "Contents of ${{ env.UNITY_EXPORT_DIR }} before attempting rename:"
+              ls -lR ${{ env.UNITY_EXPORT_DIR }}/
+              echo "Unity export might have failed. Check Unity logs from the previous step."
+              exit 1
+            fi
+            echo "Package found at ${{ env.UNITY_EXPORTED_FILE_PATH }}."
+            echo "Current permissions for the package:"
+            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+  
+            sudo chown $(id -u):$(id -g) "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            
+            echo "Permissions after chown:"
+            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+  
+            echo "Renaming ${{ env.UNITY_EXPORTED_FILE_PATH }} to ${{ env.FINAL_RELEASE_ASSET_PATH }}"
+            mv "${{ env.UNITY_EXPORTED_FILE_PATH }}" "${{ env.FINAL_RELEASE_ASSET_PATH }}"
+            
+            if [ ! -f "${{ env.FINAL_RELEASE_ASSET_PATH }}" ]; then
+              echo "Error: Failed to rename package to ${{ env.FINAL_RELEASE_ASSET_PATH }}."
+              exit 1
+            fi
+            echo "Package successfully renamed to ${{ env.FINAL_PACKAGE_NAME }} in ${{ env.UNITY_EXPORT_DIR }}."
 
       - name: List exported files after rename
         run: |
