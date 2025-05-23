@@ -23,7 +23,7 @@ namespace Editor
 
 				var outputPath = Path.Combine(_exportPackagePath, $"{_packageName}");
 
-				AssetDatabase.ExportPackage(_packageRootPath, outputPath, ExportPackageOptions.Recurse | ExportPackageOptions.IncludeDependencies);
+				AssetDatabase.ExportPackage(_packageRootPath, outputPath, ExportPackageOptions.Recurse);
 				Debug.Log($"Successfully exported '{_packageName}' to '{outputPath}'.");
 			}
 			catch (Exception e)

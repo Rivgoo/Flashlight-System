@@ -59,9 +59,9 @@ jobs:
             exit 1
           fi
           
-          UNITY_EXPORTED_BASE_NAME="FlashlightSystem"
+          UNITY_EXPORTED_BASE_NAME="FlashlightSystem.unitypackage"
           UNITY_EXPORT_DIR="Assets/Rivgo/ExportPackage"
-          UNITY_EXPORTED_FILE_PATH="${UNITY_EXPORT_DIR}/${UNITY_EXPORTED_BASE_NAME}.unitypackage"
+          UNITY_EXPORTED_FILE_PATH="${UNITY_EXPORT_DIR}/${UNITY_EXPORTED_BASE_NAME}"
 
           FINAL_PACKAGE_NAME_PREFIX="${{ github.event.inputs.package_prefix || 'FlashlightSystem' }}"
           FINAL_PACKAGE_NAME="${FINAL_PACKAGE_NAME_PREFIX}_v${VERSION}.unitypackage"
@@ -76,7 +76,7 @@ jobs:
           echo "FINAL_RELEASE_ASSET_PATH=$FINAL_RELEASE_ASSET_PATH" >> $GITHUB_ENV
           
           echo "Version for release/tag: $VERSION"
-          echo "Package name from Unity: ${UNITY_EXPORTED_BASE_NAME}.unitypackage"
+          echo "Package name from Unity: ${UNITY_EXPORTED_BASE_NAME}"
           echo "Final release asset name: $FINAL_PACKAGE_NAME"
           echo "Is prerelease: $IS_PRERELEASE"
           echo "Unity export directory: $UNITY_EXPORT_DIR"
@@ -108,14 +108,15 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: ${{ env.UNITY_VERSION_FULL }}
+          targetPlatform: StandaloneLinux64
           buildMethod: Editor.PackageExporter.ExportPackage
 
       - name: Verify and Rename Exported Package
         run: |
           echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
-          ls -lR ${{ env.UNITY_EXPORT_DIR }}/
+          ls -lR Assets/Rivgo/
           
-          if [ ! -f "${{ env.UNITY_EXPORTED_FILE_PATH }}" ]; then
+          if [ ! -f "${{ env.UNITY_EXPORTED_BASE_NAME }}" ]; then
             echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."
             echo "Unity export might have failed. Check Unity logs from the previous step."
             exit 1
