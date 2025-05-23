@@ -114,7 +114,7 @@ jobs:
       - name: Verify and Rename Exported Package
         run: |
           echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
-          ls -lR Assets/
+          ls -lR ${{ env.UNITY_EXPORT_DIR }}
           
           if [ ! -f "${{ env.UNITY_EXPORTED_BASE_NAME }}" ]; then
             echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."

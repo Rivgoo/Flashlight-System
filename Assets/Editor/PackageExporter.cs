@@ -7,8 +7,8 @@ namespace Editor
 {
 	public class PackageExporter
 	{
-		private const string _packageRootPath = "Assets";
-		private const string _exportPackagePath = "Rivgo/ExportPackage";
+		private const string _packageRootPath = "Assets/Rivgo";
+		private const string _exportPackagePath = "ExportPackage";
 		private const string _packageName = "FlashlightSystem.unitypackage";
 
 		public static void ExportPackage()
@@ -21,10 +21,10 @@ namespace Editor
 					Debug.Log($"Created output directory: {_exportPackagePath}");
 				}
 
-				var outputPath = Path.Combine(_exportPackagePath, _packageName);
+				var outputPath = Path.Combine(_packageRootPath, _exportPackagePath, _packageName);
 
 				AssetDatabase.ExportPackage(_packageRootPath, outputPath, ExportPackageOptions.Recurse);
-				Debug.Log($"Successfully exported '{_packageName}' to '{outputPath}'.");
+				Debug.Log($"Successfully exported '{_packageName}' to '{Path.GetFullPath(outputPath)}'.");
 			}
 			catch (Exception e)
 			{
