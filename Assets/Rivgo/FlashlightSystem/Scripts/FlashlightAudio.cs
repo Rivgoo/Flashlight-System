@@ -95,6 +95,7 @@ namespace Rivgo.FlashlightSystem.Scripts
 
 		private void HandleFlashlightStateChanged(bool isOn)
 		{
+			HandleBlinkBurstEnded();
 			PlayRandomOneShotSound(_switchSounds, ref _lastSwitchSoundPlayed);
 		}
 		private void HandleBlinkBurstStarted()
