@@ -30,17 +30,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Determine Version and Package Name
         id: package_vars
         run: |
           VERSION=""
-          PACKAGE_PREFIX=""
+          PACKAGE_PREFIX_INPUT=""
           IS_PRERELEASE="false"
 
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
-            PACKAGE_PREFIX="${{ github.event.inputs.package_prefix }}"
+            PACKAGE_PREFIX_INPUT="${{ github.event.inputs.package_prefix }}"
             if [ "${{ github.event.inputs.prerelease }}" == "true" ]; then
               IS_PRERELEASE="true"
             fi
@@ -50,60 +52,67 @@ jobs:
             if [[ "$VERSION" == *"-"* ]]; then
               IS_PRERELEASE="true"
             fi
-            PACKAGE_PREFIX="FlashlightSystem"
+            PACKAGE_PREFIX_INPUT="FlashlightSystem" 
             echo "Using version from tag: $VERSION"
           else
             echo "Error: Could not determine version."
             exit 1
           fi
           
-          PACKAGE_NAME="${PACKAGE_PREFIX}_v${VERSION}.unitypackage"
+          FINAL_PACKAGE_NAME="${PACKAGE_PREFIX_INPUT}_v${VERSION}.unitypackage"
+
           echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
-          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "FINAL_PACKAGE_NAME=$FINAL_PACKAGE_NAME" >> $GITHUB_ENV
           echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
-          echo "Final package name: $PACKAGE_NAME"
+
+          echo "Version for release/tag: $VERSION"
+          echo "Package name for export and release asset: $FINAL_PACKAGE_NAME"
           echo "Is prerelease: $IS_PRERELEASE"
 
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          key: Library-${{ runner.os }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
-            Library-
+            Library-${{ runner.os }}-
 
       - name: Get Unity Version
         id: unity_version
         run: |
-          echo "version=$(cat ProjectSettings/ProjectVersion.txt | grep "m_EditorVersion:" | awk '{print $2}')" >> $GITHUB_OUTPUT
+          echo "UNITY_VERSION_FULL=$(cat ProjectSettings/ProjectVersion.txt | grep "m_EditorVersion:" | awk '{print $2}')" >> $GITHUB_ENV
+          echo "Unity Editor Version: ${{ env.UNITY_VERSION_FULL }}"
 
-      - name: Export .unitypackage
+      - name: Export .unitypackage from Unity
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: ${{ steps.unity_version.outputs.version }}
+          unityVersion: ${{ env.UNITY_VERSION_FULL }}
           targetPlatform: StandaloneLinux64
           allowDirtyBuild: true
-          buildPath: "ExportOutput"
-          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=ExportOutput/${{ env.PACKAGE_NAME }}
+          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=ExportedPackageDir/${{ env.FINAL_PACKAGE_NAME }}
           method: Rivgo.Editor.PackageExporter.ExportPackage
 
-      - name: Upload Build Artifact
+      - name: List exported files
+        run: |
+          ls -l ExportedPackageDir/
+
+      - name: Upload Build Artifact (for debugging/verification)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACKAGE_NAME }}
-          path: ExportOutput/${{ env.PACKAGE_NAME }}
+          name: ${{ env.FINAL_PACKAGE_NAME }}
+          path: ExportedPackageDir/${{ env.FINAL_PACKAGE_NAME }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch')
         with:
-          name: Release ${{ env.PACKAGE_VERSION }}
+          name: v${{ env.PACKAGE_VERSION }}
           tag_name: v${{ env.PACKAGE_VERSION }}
-          files: ExportOutput/${{ env.PACKAGE_NAME }}
+          files: ExportedPackageDir/${{ env.FINAL_PACKAGE_NAME }}
           prerelease: ${{ env.IS_PRERELEASE == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
