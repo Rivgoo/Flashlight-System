@@ -65,7 +65,7 @@ jobs:
           echo "Is prerelease: $IS_PRERELEASE"
 
       - name: Cache Unity Library
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: Library
           key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
@@ -92,13 +92,13 @@ jobs:
           method: Rivgo.Editor.PackageExporter.ExportPackage
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PACKAGE_NAME }}
           path: ExportOutput/${{ env.PACKAGE_NAME }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch')
         with:
           name: Release ${{ env.PACKAGE_VERSION }}
