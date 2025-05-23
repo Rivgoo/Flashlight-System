@@ -123,14 +123,30 @@ jobs:
               exit 1
             fi
             echo "Package found at ${{ env.UNITY_EXPORTED_FILE_PATH }}."
-            echo "Current permissions for the package:"
-            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
   
-            sudo chown $(id -u):$(id -g) "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            echo "--- Permissions Snapshot Before Changes ---"
+            echo "Export Directory (${{ env.UNITY_EXPORT_DIR }}):"
+            ls -ld "${{ env.UNITY_EXPORT_DIR }}"
+            echo "Package File (${{ env.UNITY_EXPORTED_FILE_PATH }}):"
+            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            echo "-------------------------------------------"
+  
+            echo "Adjusting ownership for directory: ${{ env.UNITY_EXPORT_DIR }}"
+            sudo chown $(id -u):$(id -g) "${{ env.UNITY_EXPORT_DIR }}"
             
-            echo "Permissions after chown:"
-            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            echo "Adjusting permissions for directory: ${{ env.UNITY_EXPORT_DIR }}"
+            sudo chmod u+rwx "${{ env.UNITY_EXPORT_DIR }}"
   
+            echo "Adjusting ownership for file: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            sudo chown $(id -u):$(id -g) "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+  
+            echo "--- Permissions Snapshot After Changes ---"
+            echo "Export Directory (${{ env.UNITY_EXPORT_DIR }}):"
+            ls -ld "${{ env.UNITY_EXPORT_DIR }}"
+            echo "Package File (${{ env.UNITY_EXPORTED_FILE_PATH }}):"
+            ls -l "${{ env.UNITY_EXPORTED_FILE_PATH }}"
+            echo "------------------------------------------"
+            
             echo "Renaming ${{ env.UNITY_EXPORTED_FILE_PATH }} to ${{ env.FINAL_RELEASE_ASSET_PATH }}"
             mv "${{ env.UNITY_EXPORTED_FILE_PATH }}" "${{ env.FINAL_RELEASE_ASSET_PATH }}"
             
