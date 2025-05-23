@@ -9,7 +9,7 @@ namespace Editor
 	{
 		private const string _packageRootPath = "Assets/Rivgo";
 		private const string _exportPackagePath = "ExportPackage";
-		private const string _packageName = "FlashlightSystem";
+		private const string _packageName = "FlashlightSystem.unitypackage";
 
 		public static void ExportPackage()
 		{
@@ -21,7 +21,7 @@ namespace Editor
 					Debug.Log($"Created output directory: {_exportPackagePath}");
 				}
 
-				var outputPath = Path.Combine(_exportPackagePath, $"{_packageName}");
+				var outputPath = Path.Combine(_exportPackagePath, _packageName);
 
 				AssetDatabase.ExportPackage(_packageRootPath, outputPath, ExportPackageOptions.Recurse);
 				Debug.Log($"Successfully exported '{_packageName}' to '{outputPath}'.");
