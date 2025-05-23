@@ -59,20 +59,29 @@ jobs:
             exit 1
           fi
           
-          FINAL_PACKAGE_NAME="${PACKAGE_PREFIX_INPUT}_v${VERSION}.unitypackage"
-          EXPORT_DIR="PackageExportOutput" 
+          UNITY_EXPORTED_BASE_NAME="FlashlightSystem"
+          UNITY_EXPORT_DIR="ExportPackage"
+          UNITY_EXPORTED_FILE_PATH="${UNITY_EXPORT_DIR}/${UNITY_EXPORTED_BASE_NAME}.unitypackage"
+
+          FINAL_PACKAGE_NAME_PREFIX="${{ github.event.inputs.package_prefix || 'FlashlightSystem' }}"
+          FINAL_PACKAGE_NAME="${FINAL_PACKAGE_NAME_PREFIX}_v${VERSION}.unitypackage"
+          
+          FINAL_RELEASE_ASSET_PATH="${UNITY_EXPORT_DIR}/${FINAL_PACKAGE_NAME}"
 
           echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
           echo "FINAL_PACKAGE_NAME=$FINAL_PACKAGE_NAME" >> $GITHUB_ENV
           echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
-          echo "EXPORT_DIR=$EXPORT_DIR" >> $GITHUB_ENV
-          echo "FULL_EXPORT_PATH=${EXPORT_DIR}/${FINAL_PACKAGE_NAME}" >> $GITHUB_ENV
-
+          echo "UNITY_EXPORT_DIR=$UNITY_EXPORT_DIR" >> $GITHUB_ENV
+          echo "UNITY_EXPORTED_FILE_PATH=$UNITY_EXPORTED_FILE_PATH" >> $GITHUB_ENV
+          echo "FINAL_RELEASE_ASSET_PATH=$FINAL_RELEASE_ASSET_PATH" >> $GITHUB_ENV
+          
           echo "Version for release/tag: $VERSION"
-          echo "Package name for export and release asset: $FINAL_PACKAGE_NAME"
+          echo "Package name from Unity: ${UNITY_EXPORTED_BASE_NAME}.unitypackage"
+          echo "Final release asset name: $FINAL_PACKAGE_NAME"
           echo "Is prerelease: $IS_PRERELEASE"
-          echo "Export directory: $EXPORT_DIR"
-          echo "Full export path for Unity: ${{ env.FULL_EXPORT_PATH }}"
+          echo "Unity export directory: $UNITY_EXPORT_DIR"
+          echo "Path to package after Unity export: $UNITY_EXPORTED_FILE_PATH"
+          echo "Path to package for release (after rename): $FINAL_RELEASE_ASSET_PATH"
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -88,8 +97,8 @@ jobs:
           echo "UNITY_VERSION_FULL=$(cat ProjectSettings/ProjectVersion.txt | grep "m_EditorVersion:" | awk '{print $2}')" >> $GITHUB_ENV
           echo "Unity Editor Version: ${{ env.UNITY_VERSION_FULL }}"
       
-      - name: Create export directory before Unity step
-        run: mkdir -p ${{ env.EXPORT_DIR }}
+      - name: Ensure export directory exists
+        run: mkdir -p ${{ env.UNITY_EXPORT_DIR }}
 
       - name: Export .unitypackage from Unity
         uses: game-ci/unity-builder@v4
@@ -99,19 +108,40 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: ${{ env.UNITY_VERSION_FULL }}
-          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=${{ env.FULL_EXPORT_PATH }}
+          targetPlatform: StandaloneLinux64 
           buildMethod: Editor.PackageExporter.ExportPackage
 
-      - name: List exported files
+      - name: Verify and Rename Exported Package
         run: |
-            echo "Contents of ${{ env.EXPORT_DIR }}:"
-            ls -lR ${{ env.EXPORT_DIR }}/
+          echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
+          ls -lR ${{ env.UNITY_EXPORT_DIR }}/
+          
+          if [ ! -f "${{ env.UNITY_EXPORTED_FILE_PATH }}" ]; then
+            echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."
+            echo "Unity export might have failed. Check Unity logs from the previous step."
+            exit 1
+          fi
+          echo "Package found at ${{ env.UNITY_EXPORTED_FILE_PATH }}."
+          
+          echo "Renaming ${{ env.UNITY_EXPORTED_FILE_PATH }} to ${{ env.FINAL_RELEASE_ASSET_PATH }}"
+          mv "${{ env.UNITY_EXPORTED_FILE_PATH }}" "${{ env.FINAL_RELEASE_ASSET_PATH }}"
+          
+          if [ ! -f "${{ env.FINAL_RELEASE_ASSET_PATH }}" ]; then
+            echo "Error: Failed to rename package to ${{ env.FINAL_RELEASE_ASSET_PATH }}."
+            exit 1
+          fi
+          echo "Package successfully renamed to ${{ env.FINAL_PACKAGE_NAME }} in ${{ env.UNITY_EXPORT_DIR }}."
+
+      - name: List exported files after rename
+        run: |
+            echo "Contents of ${{ env.UNITY_EXPORT_DIR }} after rename:"
+            ls -lR ${{ env.UNITY_EXPORT_DIR }}/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_PACKAGE_NAME }}
-          path: ${{ env.FULL_EXPORT_PATH }}
+          path: ${{ env.FINAL_RELEASE_ASSET_PATH }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -119,7 +149,7 @@ jobs:
         with:
           name: v${{ env.PACKAGE_VERSION }}
           tag_name: v${{ env.PACKAGE_VERSION }}
-          files: ${{ env.FULL_EXPORT_PATH }}
+          files: ${{ env.FINAL_RELEASE_ASSET_PATH }}
           prerelease: ${{ env.IS_PRERELEASE == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
