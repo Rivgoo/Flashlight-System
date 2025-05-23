@@ -93,19 +93,38 @@ jobs:
           unityVersion: ${{ env.UNITY_VERSION_FULL }}
           targetPlatform: StandaloneLinux64
           allowDirtyBuild: true
-          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=ExportedPackageDir/${{ env.FINAL_PACKAGE_NAME }}
+          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=${{ env.FINAL_PACKAGE_NAME }}
           method: Rivgo.Editor.PackageExporter.ExportPackage
-
+  
+      - name: Verify package existence at root and create export directory
+        run: |
+            echo "Looking for package at workspace root: ${{ env.FINAL_PACKAGE_NAME }}"
+            ls -la .
+            if [ ! -f "${{ env.FINAL_PACKAGE_NAME }}" ]; then
+              echo "Error: Package ${{ env.FINAL_PACKAGE_NAME }} was not found in the project root after export."
+              echo "Unity export might have failed or outputted elsewhere. Check Unity logs from the previous step."
+              exit 1
+            fi
+            echo "Package found at project root."
+            mkdir -p ExportedPackageDir
+            echo "ExportedPackageDir created (if it didn't exist)."
+  
+      - name: Move package to ExportedPackageDir
+        run: |
+            mv "${{ env.FINAL_PACKAGE_NAME }}" "ExportedPackageDir/"
+            echo "Moved ${{ env.FINAL_PACKAGE_NAME }} to ExportedPackageDir/"
+  
       - name: List exported files
         run: |
-          ls -l ExportedPackageDir/
-
+            echo "Contents of ExportedPackageDir:"
+            ls -lR ExportedPackageDir/
+  
       - name: Upload Build Artifact (for debugging/verification)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_PACKAGE_NAME }}
           path: ExportedPackageDir/${{ env.FINAL_PACKAGE_NAME }}
-
+  
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch')
