@@ -65,8 +65,8 @@ jobs:
           echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
           echo "FINAL_PACKAGE_NAME=$FINAL_PACKAGE_NAME" >> $GITHUB_ENV
           echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
-          echo "EXPORT_DIR=$EXPORT_DIR" >> $GITHUB_ENV # Make EXPORT_DIR available
-          echo "FULL_EXPORT_PATH=${EXPORT_DIR}/${FINAL_PACKAGE_NAME}" >> $GITHUB_ENV # Full path for Unity
+          echo "EXPORT_DIR=$EXPORT_DIR" >> $GITHUB_ENV
+          echo "FULL_EXPORT_PATH=${EXPORT_DIR}/${FINAL_PACKAGE_NAME}" >> $GITHUB_ENV
 
           echo "Version for release/tag: $VERSION"
           echo "Package name for export and release asset: $FINAL_PACKAGE_NAME"
@@ -99,31 +99,15 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: ${{ env.UNITY_VERSION_FULL }}
-          targetPlatform: StandaloneLinux64 
-          allowDirtyBuild: true
-          projectPath: .
           customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=${{ env.FULL_EXPORT_PATH }}
-          method: Editor.PackageExporter.ExportPackage
+          buildMethod: Editor.PackageExporter.ExportPackage
 
-      - name: Verify package existence in export directory
-        run: |
-            echo "Looking for package in export directory: ${{ env.FULL_EXPORT_PATH }}"
-            ls -lR ${{ env.EXPORT_DIR }}/
-            if [ ! -f "${{ env.FULL_EXPORT_PATH }}" ]; then
-              echo "Error: Package ${{ env.FINAL_PACKAGE_NAME }} was not found in ${{ env.EXPORT_DIR }} after export."
-              echo "Unity export might have failed or outputted elsewhere. Check Unity logs from the previous step."
-              echo "Listing workspace root contents:"
-              ls -la .
-              exit 1
-            fi
-            echo "Package found in export directory."
-
-      - name: List exported files (redundant, but good for final check)
+      - name: List exported files
         run: |
             echo "Contents of ${{ env.EXPORT_DIR }}:"
             ls -lR ${{ env.EXPORT_DIR }}/
 
-      - name: Upload Build Artifact (for debugging/verification)
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.FINAL_PACKAGE_NAME }}
