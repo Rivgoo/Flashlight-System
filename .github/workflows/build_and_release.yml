@@ -116,7 +116,7 @@ jobs:
           echo "Looking for package at: ${{ env.UNITY_EXPORTED_FILE_PATH }}"
           ls -lR ${{ env.UNITY_EXPORT_DIR }}
           
-          if [ ! -f "${{ env.UNITY_EXPORTED_BASE_NAME }}" ]; then
+          if [ ! -f "${{ env.UNITY_EXPORTED_FILE_PATH }}" ]; then
             echo "Error: Package was not found at ${{ env.UNITY_EXPORTED_FILE_PATH }} after export."
             echo "Unity export might have failed. Check Unity logs from the previous step."
             exit 1
