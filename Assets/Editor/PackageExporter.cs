@@ -15,13 +15,15 @@ namespace Editor
 		{
 			try
 			{
-				if (!Directory.Exists(_exportPackagePath))
+				var exportPackagePath = Path.Combine(_packageRootPath, _exportPackagePath);
+
+				if (!Directory.Exists(exportPackagePath))
 				{
-					Directory.CreateDirectory(_exportPackagePath);
-					Debug.Log($"Created output directory: {_exportPackagePath}");
+					Directory.CreateDirectory(exportPackagePath);
+					Debug.Log($"Created output directory: {exportPackagePath}");
 				}
 
-				var outputPath = Path.Combine(_packageRootPath, _exportPackagePath, _packageName);
+				var outputPath = Path.Combine(exportPackagePath, _packageName);
 
 				AssetDatabase.ExportPackage(_packageRootPath, outputPath, ExportPackageOptions.Recurse);
 				Debug.Log($"Successfully exported '{_packageName}' to '{Path.GetFullPath(outputPath)}'.");
