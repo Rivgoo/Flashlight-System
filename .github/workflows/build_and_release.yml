@@ -1,70 +1,109 @@
-name: Build and Release
+name: Release Unity Package
 
 on:
   workflow_dispatch:
-  create:
-    tags:
-      - 'v*.*.*'
+    inputs:
+      version:
+        description: 'Package Version (e.g., 1.0.0 or 1.0.0-beta.1)'
+        required: true
+        default: '0.1.0'
+      package_prefix:
+        description: 'Prefix for the package name'
+        required: true
+        default: 'FlashlightSystem'
+      prerelease:
+        description: 'Mark as pre-release?'
+        type: boolean
+        default: false
 
-env:
-  UNITY_PROJECT_PATH: .
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   build_and_release:
+    name: Build and Release Unity Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Determine Version and Package Name
+        id: package_vars
+        run: |
+          VERSION=""
+          PACKAGE_PREFIX=""
+          IS_PRERELEASE="false"
+
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            PACKAGE_PREFIX="${{ github.event.inputs.package_prefix }}"
+            if [ "${{ github.event.inputs.prerelease }}" == "true" ]; then
+              IS_PRERELEASE="true"
+            fi
+            echo "Using version from workflow_dispatch: $VERSION"
+          elif [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            if [[ "$VERSION" == *"-"* ]]; then
+              IS_PRERELEASE="true"
+            fi
+            PACKAGE_PREFIX="FlashlightSystem"
+            echo "Using version from tag: $VERSION"
+          else
+            echo "Error: Could not determine version."
+            exit 1
+          fi
+          
+          PACKAGE_NAME="${PACKAGE_PREFIX}_v${VERSION}.unitypackage"
+          echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
+          echo "Final package name: $PACKAGE_NAME"
+          echo "Is prerelease: $IS_PRERELEASE"
+
+      - name: Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-
 
       - name: Get Unity Version
         id: unity_version
         run: |
-          UNITY_VERSION_LINE=$(grep "m_EditorVersion:" ProjectSettings/ProjectVersion.txt)
-          UNITY_VERSION=$(echo "$UNITY_VERSION_LINE" | awk '{print $2}')
-          echo "UNITY_EDITOR_VERSION=$UNITY_VERSION" >> $GITHUB_ENV
+          echo "version=$(cat ProjectSettings/ProjectVersion.txt | grep "m_EditorVersion:" | awk '{print $2}')" >> $GITHUB_OUTPUT
 
-      - name: Determine Package Version
-        id: package_version
-        run: |
-          if [[ "${{ github.event_name }}" == "create" && "${{ github.ref_type }}" == "tag" ]]; then
-            echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=latest" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Set Package Filename
-        id: package_filename
-        run: echo "FILENAME=Flashlight_${{ steps.package_version.outputs.VERSION }}_Rivgo.unitypackage" >> $GITHUB_OUTPUT
-
-      - name: Execute Unity Editor Script to Export Package
+      - name: Export .unitypackage
         uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion: ${{ env.UNITY_EDITOR_VERSION }}
+          unityVersion: ${{ steps.unity_version.outputs.version }}
           targetPlatform: StandaloneLinux64
-          projectPath: ${{ env.UNITY_PROJECT_PATH }}
-          executeMethod: Rivgo.Editor.PackageExporter.ExportPackage
-          customParameters: version=${{ steps.package_version.outputs.VERSION }} outputPath=Output/${{ steps.package_filename.outputs.FILENAME }}
+          allowDirtyBuild: true
+          buildPath: "ExportOutput"
+          customParameters: version=${{ env.PACKAGE_VERSION }};outputPath=ExportOutput/${{ env.PACKAGE_NAME }}
+          method: Rivgo.Editor.PackageExporter.ExportPackage
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/create-release@v1
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: ExportOutput/${{ env.PACKAGE_NAME }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch')
+        with:
+          name: Release ${{ env.PACKAGE_VERSION }}
+          tag_name: v${{ env.PACKAGE_VERSION }}
+          files: ExportOutput/${{ env.PACKAGE_NAME }}
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          body: Automated release for version ${{ github.ref_name }}.
-          draft: false
-          prerelease: false
-          files: ${{ env.UNITY_PROJECT_PATH }}/Output/${{ steps.package_filename.outputs.FILENAME }}
-
-      - name: Upload Artifact (for main branch pushes)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.package_filename.outputs.FILENAME }}
-          path: ${{ env.UNITY_PROJECT_PATH }}/Output/${{ steps.package_filename.outputs.FILENAME }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
