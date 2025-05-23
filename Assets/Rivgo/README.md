@@ -10,24 +10,13 @@ A modular flashlight system for your Unity projects, designed for easy integrati
 *   **Light Cookies:** Supports Unity's Light Cookies for custom light shapes. Sample cookies provided. 🍪
 *   **New Input System Ready:** Integrates with Unity's Input System via the `FlashlightInput.cs` component and a pre-configured `InputActionAsset`. 🎮
 
-## 🛠️ Prerequisites
-
-*   Unity (developed with a version supporting URP and New Input System, e.g., 2021.3 LTS or newer).
-*   **Universal Render Pipeline (URP):** The provided demo and prefabs are configured for URP.
-*   **Input System Package:** Install from Unity Package Manager (`Window > Package Manager > Unity Registry > Input System`).
-
 ## 🚀 Quick Setup Guide
 
-1.  **Import Package:**
-    *   Download the `Flashlight_vX.Y.Z_Rivgo.unitypackage` file.
-    *   In Unity, go to `Assets > Import Package > Custom Package...` and select the downloaded file.
-    *   Import all assets.
-
-2.  **Install Dependencies:**
+1.  **Install Dependencies:**
     *   If not already installed, open the Package Manager (`Window > Package Manager`).
     *   Find "Input System" in the "Unity Registry" and click "Install".
 
-3.  **Input Action Setup (for `SwitchFlashlight`):**
+2.  **Input Action Setup (for `SwitchFlashlight`):**
     The package includes `Assets/Rivgo/FPC/Rivgo_FPC_InputSystem_Actions.inputactions`. This asset pre-defines the `SwitchFlashlight` action (bound to the 'E' key by default).
     To use it with your player:
     *   Select your player GameObject.
@@ -43,7 +32,7 @@ A modular flashlight system for your Unity projects, designed for easy integrati
             *   The included `= Player =.prefab` (see step 4b) already has `FlashlightInput.cs` on the root and is configured.
         *   From the function dropdown, select `FlashlightInput > OnSwitchFlashlight()`.
 
-4.  **Using the Flashlight:**
+3.  **Using the Flashlight:**
 
     *   **Option A: Add Flashlight Prefab to Your Player:**
         *   Locate the `Flashlight.prefab` at `Assets/Rivgo/FlashlightSystem/Flashlight.prefab`.
@@ -60,7 +49,7 @@ A modular flashlight system for your Unity projects, designed for easy integrati
             *   `FlashlightInput.cs` on the player root, linked to the `SwitchFlashlight` action.
             *   It's ready to go! Press 'E' to toggle the flashlight.
 
-5.  **Demo Scene:**
+4.  **Demo Scene:**
     *   Open the scene `Assets/Rivgo/FlashlightSystem/Demo/Scenes/DEMO_Flashlight_System.unity`.
     *   This scene uses the `= Player =.prefab` and demonstrates a fully working setup.
 
@@ -131,7 +120,6 @@ The Flashlight System provides a comprehensive solution for implementing a flash
             *   `SimpleFPC.cs`: Script for the first-person character movement and camera look.
         *   `Rivgo_FPC_InputSystem_Actions.inputactions`: The `InputActionAsset` used by the FPC and `FlashlightInput`.
 *   **`Assets/Settings/`**: Contains URP-related settings assets. These are part of the project setup used to develop the package and are included for the demo scene to work correctly.
-*   **`Editor/PackageExporter.cs`**: Script to help export the `Flashlight` folder as a `.unitypackage`.
 
 ### 3. Core Components 🔩
 
